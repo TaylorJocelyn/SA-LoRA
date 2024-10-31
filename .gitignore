@@ -1,0 +1,11 @@
+**/__pycache__/
+*.pyc
+*.ckpt
+reproduce/ddim/weight/*
+reproduce/ddim/data/*
+reproduce/ldmi/weight/*
+reproduce/ldmi/data/*
+experiments_log/*
+evaluate_data/*
+clip/*
+taming-transformers/*
