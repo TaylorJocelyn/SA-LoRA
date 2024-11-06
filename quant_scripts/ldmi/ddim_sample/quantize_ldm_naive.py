@@ -59,7 +59,7 @@ if __name__ == '__main__':
     from quant_scripts.ldmi.quant_dataset import DiffusionInputDataset
     from torch.utils.data import DataLoader
 
-    dataset = DiffusionInputDataset('reproduce/ldm/DiffusionInput_250steps.pth')
+    dataset = DiffusionInputDataset('reproduce/ldmi/data/DiffusionInput_250steps.pth')
     data_loader = DataLoader(dataset=dataset, batch_size=8, shuffle=True)
     
     wq_params = {'n_bits': n_bits_w, 'channel_wise': True, 'scale_method': 'max'}

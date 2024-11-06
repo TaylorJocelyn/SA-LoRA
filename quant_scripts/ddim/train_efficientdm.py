@@ -74,7 +74,7 @@ def get_parser():
     parser.add_argument(
         "--sample_type",
         type=str,
-        default="generalized",
+        default="dpm_solver",
         help="sampling approach (generalized or ddpm_noisy)",
     )
     parser.add_argument(
@@ -84,7 +84,7 @@ def get_parser():
         help="skip according to (uniform or quadratic)",
     )
     parser.add_argument(
-        "--timesteps", type=int, default=100, help="number of steps involved"
+        "--timesteps", type=int, default=20, help="number of steps involved"
     )
     parser.add_argument(
         "--eta",
@@ -138,7 +138,7 @@ def get_parser():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=16,
+        default=64,
         help="train batch size",
     ),
     parser.add_argument(
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     config = dict2namespace(config)
 
     # fix random seed
-    seed_everything(args.seed)
+    # seed_everything(args.seed)
 
     # setup logger
     logdir = os.path.join(args.logdir, "samples", now)
@@ -251,7 +251,7 @@ if __name__ == '__main__':
     
     print('First run to init model...') ## need run to init temporal act quantizer
     with torch.no_grad():
-        _ = qnn(cali_images[:4].to(device), cali_t[:4].to(device))
+        _ = qnn(cali_images[:64].to(device), cali_t[:64].to(device))
 
     model = qnn
 
@@ -315,49 +315,48 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     all_samples = list()
     st_time = time.time()
-    # for epoch in range(NUM_EPOCHS):
-    #     print(f'{epoch=}')
-    #     torch.cuda.manual_seed(3407+epoch)
-    #     samples_ddim = diffusion_trainer.sample(batch_size, train_mode=True).to(device)
-    #     # print('---- samples_ddim -------')
-    #     # print('samples_ddim shape, ', samples_ddim.shape)
-    #     # print('min ', torch.min(samples_ddim))
-    #     # print('max ', torch.max(samples_ddim))
+    for epoch in range(NUM_EPOCHS):
+        print(f'{epoch=}')
+        # torch.cuda.manual_seed(3407+epoch)
+        samples_ddim = diffusion_trainer.sample(batch_size, train_mode=True).to(device)
+        # print('---- samples_ddim -------')
+        # print('samples_ddim shape, ', samples_ddim.shape)
+        # print('min ', torch.min(samples_ddim))
+        # print('max ', torch.max(samples_ddim))
 
-    #     # x_samples_ddim = torch.clamp((samples_ddim+1.0)/2.0, 
-    #     #                             min=0.0, max=1.0)
+        # x_samples_ddim = torch.clamp((samples_ddim+1.0)/2.0, 
+        #                             min=0.0, max=1.0)
 
-    #     # x_samples_ddim = torch.clamp(samples_ddim, min=0.0, max=1.0)
-    #     # x_samples_ddim = (x_samples_ddim * 255.0).clamp(0, 255).to(torch.uint8)
+        # x_samples_ddim = torch.clamp(samples_ddim, min=0.0, max=1.0)
+        # x_samples_ddim = (x_samples_ddim * 255.0).clamp(0, 255).to(torch.uint8)
 
-    #     # print('x_samples_ddim min: ', torch.min(x_samples_ddim))
-    #     # print('x_samples_ddim max: ', torch.max(x_samples_ddim))
-    #     # x_samples_ddim = x_samples_ddim.permute(0, 2, 3, 1)
-    #     # samples = x_samples_ddim.contiguous()
+        # print('x_samples_ddim min: ', torch.min(x_samples_ddim))
+        # print('x_samples_ddim max: ', torch.max(x_samples_ddim))
+        # x_samples_ddim = x_samples_ddim.permute(0, 2, 3, 1)
+        # samples = x_samples_ddim.contiguous()
         
-    #     # generate samples for visual evaluation
-    #     if epoch % 16 == 0:
-    #         print('Evaluating...')
-    #         torch.cuda.manual_seed(3407)
-    #         model.eval()
-    #         for _ in range(4):
-    #             samples_ddim = diffusion_trainer.sample(batch_size=6, train_mode=False).to(device)
-    #             samples_ddim = torch.clamp((samples_ddim+1.0)/2.0, 
-    #                                         min=0.0, max=1.0)
-    #             all_samples.append(samples_ddim)
+        # generate samples for visual evaluation
+        if epoch % 16 == 0:
+            print('Evaluating...')
+            torch.cuda.manual_seed(3407)
+            model.eval()
+            for _ in range(4):
+                samples_ddim = diffusion_trainer.sample(batch_size=6, train_mode=False).to(device)
+                samples_ddim = torch.clamp(samples_ddim, min=0.0, max=1.0)
+                all_samples.append(samples_ddim)
             
-    #         # display as grid
-    #         grid = torch.stack(all_samples, 0)
-    #         grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-    #         grid = make_grid(grid, nrow=6)
+            # display as grid
+            grid = torch.stack(all_samples, 0)
+            grid = rearrange(grid, 'n b c h w -> (n b) c h w')
+            grid = make_grid(grid, nrow=6)
 
-    #         # to image
-    #         grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-    #         image_to_save = Image.fromarray(grid.astype(np.uint8))
-    #         image_to_save.save(os.path.join(eval_out_dir, "epoch{}.jpg".format(epoch)))
-    #         all_samples.clear()
+            # to image
+            grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
+            image_to_save = Image.fromarray(grid.astype(np.uint8))
+            image_to_save.save(os.path.join(eval_out_dir, "epoch{}.jpg".format(epoch)))
+            all_samples.clear()
 
-    torch.save(model.state_dict(), 'reproduce/ddim/weight/quantw{}a{}_{}steps_efficientdm.pth'.format(n_bits_w, n_bits_a, args.timesteps))
+    torch.save(model.state_dict(), 'reproduce/ddim/weight/quantw{}a{}_{}_{}steps_efficientdm.pth'.format(n_bits_w, n_bits_a, args.skip_type, args.timesteps))
 
     ed_time = time.time()
     print(f'qlora took {ed_time - st_time:.5f} seconds')

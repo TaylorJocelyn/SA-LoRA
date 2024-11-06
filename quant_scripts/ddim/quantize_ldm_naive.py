@@ -186,7 +186,7 @@ if __name__ == '__main__':
     
     wq_params = {'n_bits': args.weight_bit, 'channel_wise': True, 'scale_method': 'max'}
     aq_params = {'n_bits': args.act_bit, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': True}
-    qnn = QuantModel(model=model, weight_quant_params=wq_params, act_quant_params=aq_params)
+    qnn = QuantModel(model=model, weight_quant_params=wq_params, act_quant_params=aq_params, need_init=True)
     qnn.to(device)
     qnn.eval()
 
@@ -199,11 +199,11 @@ if __name__ == '__main__':
 
     print('First run to init model...')
     with torch.no_grad():
-        _ = qnn(cali_images[:32].to(device), cali_t[:32].to(device))
+        _ = qnn(cali_images[:128].to(device), cali_t[:128].to(device))
 
     save_dir = 'reproduce/ddim/weight'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    save_path = os.path.join(save_dir, 'quantw{}a{}_naiveQ.pth'.format(args.weight_bit, args.act_bit))
+    save_path = os.path.join(save_dir, 'quantw{}a{}_{}_{}steps_naiveQ.pth'.format(args.weight_bit, args.act_bit, args.skip_type, args.timesteps))
     torch.save(qnn.state_dict(), save_path)
     pass

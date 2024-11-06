@@ -424,7 +424,7 @@ class QuantModule_intnlora(nn.Module):
         self.extra_repr = org_module.extra_repr
 
         ## add lora here
-        r = 32
+        r = 16
         lora_dropout = 0.0
         if lora_dropout > 0.0:
             self.lora_dropout_layer = nn.Dropout(p=lora_dropout)
@@ -450,10 +450,12 @@ class QuantModule_intnlora(nn.Module):
             lora_weight = self.loraB(self.loraA(self.lora_dropout_layer(E)))
             lora_weight = lora_weight.T
             weight = orig_weight + lora_weight
+            # weight = orig_weight
         elif self.fwd_func is F.conv2d:
             lora_weight = self.loraB.weight.squeeze(-1).squeeze(-1) @ self.loraA.weight.permute(2,3,0,1)  ## (cout, r) @　(3, 3, r, cin)
             lora_weight = lora_weight.permute(2,3,0,1)
             weight = orig_weight + lora_weight
+            # weight = orig_weight
         else:
             weight = orig_weight
 
@@ -507,7 +509,7 @@ class SimpleDequantizer(nn.Module):
         if len(x_int_pack8.shape) == 4:
             x_int_pack8 = x_int_pack8.flatten(1)
 
-        weight = torch.bitwise_right_shift(torch.unsqueeze(x_int_pack8, 1).expand(-1, 8 // self.n_bits, -1), self.gap.to(x_int_pack8.device).unsqueeze(-1)).to(torch.int8)
+        weight = torch.bitwise_right_shift(torch.unsqueeze(x_int_pack8, 1).expand(-1, 8 // self.n_bits, -1), self.gap.to(x_int_pack8.device).unsqueeze(-1)).to(torch.uint8)
         weight = torch.bitwise_and(weight,(2 ** self.n_bits) - 1)
         weight = weight.reshape(-1, weight.shape[2])
         weight = weight.reshape([self.ori_shape[0]*self.size_scale]+list(self.ori_shape[1:]))

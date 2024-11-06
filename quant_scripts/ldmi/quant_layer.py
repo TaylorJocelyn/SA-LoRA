@@ -199,6 +199,7 @@ class TemporalActivationQuantizer(UniformAffineQuantizer):
 
         self.total_steps = num_steps
         self.current_step = self.total_steps - 1
+        self.step_size = 1
 
         self.delta = nn.Parameter(torch.tensor(0.005), requires_grad=False)
         self.zero_point = nn.Parameter(torch.tensor(0.005), requires_grad=False)
@@ -234,7 +235,7 @@ class TemporalActivationQuantizer(UniformAffineQuantizer):
             x_quant = self.clipping(x_int, 0, self.n_levels - 1) ## modified here to replace torch.clamp for gradient prop
             # x_quant = torch.clamp(x_int, 0, self.n_levels - 1)
             x_dequant = (x_quant - self.zp_list[self.current_step]) * self.delta_list[self.current_step]
-            self.current_step = self.total_steps - 1 if  self.current_step - 1 < 0 else self.current_step - 1
+            self.current_step = self.total_steps - 1 if  self.current_step - self.step_size < 0 else self.current_step - self.step_size
             return x_dequant
 
     def init_quantization_scale(self, x: torch.Tensor, channel_wise: bool = False):
@@ -318,6 +319,7 @@ class TemporalActivationQuantizer(UniformAffineQuantizer):
         s = 'bit={n_bits}, scale_method={scale_method}, symmetric={sym}, channel_wise={channel_wise},' \
             ' leaf_param={leaf_param}'
         return s.format(**self.__dict__)
+    
     
 class QuantModule(nn.Module):
     """
@@ -507,7 +509,7 @@ class SimpleDequantizer(nn.Module):
         if len(x_int_pack8.shape) == 4:
             x_int_pack8 = x_int_pack8.flatten(1)
 
-        weight = torch.bitwise_right_shift(torch.unsqueeze(x_int_pack8, 1).expand(-1, 8 // self.n_bits, -1), self.gap.to(x_int_pack8.device).unsqueeze(-1)).to(torch.int8)
+        weight = torch.bitwise_right_shift(torch.unsqueeze(x_int_pack8, 1).expand(-1, 8 // self.n_bits, -1), self.gap.to(x_int_pack8.device).unsqueeze(-1)).to(torch.uint8)
         weight = torch.bitwise_and(weight,(2 ** self.n_bits) - 1)
         weight = weight.reshape(-1, weight.shape[2])
         weight = weight.reshape([self.ori_shape[0]*self.size_scale]+list(self.ori_shape[1:]))

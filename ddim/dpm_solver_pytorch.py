@@ -1175,8 +1175,6 @@ class DPM_Solver:
         intermediates = []
         x_interms = []
         t_interms = []
-        if order == 1:
-            x_interms.append(x)
 
         with torch.no_grad():
             if method == 'adaptive':
@@ -1246,7 +1244,7 @@ class DPM_Solver:
 
                         if order == 1:
                             x_interms.append(x)
-                            t_interms.append(s)
+                            t_interms.append(t)
                         elif order == 2:
                             x_interms.append(inter_dict['x_s1'])
                             t_interms.append(inter_dict['s1'])

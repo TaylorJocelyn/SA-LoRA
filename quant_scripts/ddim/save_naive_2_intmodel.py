@@ -104,7 +104,7 @@ def get_parser():
         "--quant_ckpt",
         type=str,
         required=True,
-        help="calibration dataset path",
+        help="quant weight path",
     ),
     parser.add_argument(
         "--verbose", action="store_true",
@@ -220,5 +220,5 @@ if __name__ == '__main__':
             module.weight.data = qweight
     
     qnn_sd = qnn.state_dict()
-    torch.save(qnn_sd, 'reproduce/ddim/weight/quantw{}a{}_naiveQ_intsaved.pth'.format(n_bits_w, n_bits_a))
+    torch.save(qnn_sd, 'reproduce/ddim/weight/quantw{}a{}_{}_{}steps_naiveQ_intsaved.pth'.format(n_bits_w, n_bits_a, args.skip_type, args.timesteps))
     

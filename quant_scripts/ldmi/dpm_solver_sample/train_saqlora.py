@@ -21,7 +21,7 @@ import numpy as np
 from PIL import Image
 from einops import rearrange
 from torchvision.utils import make_grid
-
+torch.cuda.manual_seed(3407)
 
 from quant_scripts.ldmi.quant_model import QuantModel_intnlora
 from quant_scripts.ldmi.quant_layer import QuantModule_intnlora, SimpleDequantizer
@@ -52,7 +52,7 @@ def load_model_from_config(config, ckpt, device):
     sd = pl_sd["state_dict"]
     model = instantiate_from_config(config.model)
     m, u = model.load_state_dict(sd, strict=False)
-    model.cuda(1)
+    # model.cuda()
     model.to(device)
     return model
 
@@ -73,12 +73,11 @@ def get_train_samples(train_loader, num_samples):
     return torch.cat(image_data, dim=0)[:num_samples], torch.cat(t_data, dim=0)[:num_samples], torch.cat(y_data, dim=0)[:num_samples]
 
 if __name__ == '__main__':
-    device = torch.device('cuda:1')
-    n_samples_per_class = 2
+    device = torch.device('cuda:0')
+    n_samples_per_class = 4
     ## Quality, sampling speed and diversity are best controlled via the `scale`, `ddim_steps` and `ddim_eta` variables
-    ddim_steps = 20
-    ddim_eta = 0.0
-    scale = 3.0   # for  guidance
+    sample_steps = 100
+    scale = 2.0   # for  guidance
 
     fp_model = get_model(device)
     fp_model.cond_stage_model.cpu()
@@ -86,17 +85,17 @@ if __name__ == '__main__':
     model = get_model(device)
     # model.first_stage_model.cpu()
     dmodel = model.model.diffusion_model
-    dmodel.cuda()
+    dmodel.to(device)
     dmodel.eval()
     from quant_scripts.ldmi.quant_dataset import DiffusionInputDataset
     from torch.utils.data import DataLoader
 
-    dataset = DiffusionInputDataset('reproduce/ldmi/data/DiffusionInput_250steps.pth')
+    dataset = DiffusionInputDataset('reproduce/ldmi/data/DiffusionSolverInput_250steps.pth')
     data_loader = DataLoader(dataset=dataset, batch_size=8, shuffle=True) ## each sample is (16,4,32,32)
     
     wq_params = {'n_bits': n_bits_w, 'channel_wise': True, 'scale_method': 'mse'}
     aq_params = {'n_bits': n_bits_a, 'channel_wise': False, 'scale_method': 'mse', 'leaf_param': True}
-    qnn = QuantModel_intnlora(model=dmodel, weight_quant_params=wq_params, act_quant_params=aq_params, num_steps=ddim_steps)
+    qnn = QuantModel_intnlora(model=dmodel, weight_quant_params=wq_params, act_quant_params=aq_params, num_steps=sample_steps)
     qnn.to(device)
     qnn.eval()
 
@@ -112,7 +111,7 @@ if __name__ == '__main__':
         if isinstance(module, QuantModule_intnlora) and module.ignore_reconstruction is False:
             module.intn_dequantizer = SimpleDequantizer(uaq=module.weight_quantizer, weight=module.weight, device=device)
 
-    ckpt = torch.load('reproduce/ldmi/weight/quantw4a4_naiveQ_intsaved.pth'.format(n_bits_w), map_location='cpu')
+    ckpt = torch.load('reproduce/ldmi/weight/saqlora/quantw4a4_naiveQ_intsaved.pth'.format(n_bits_w), map_location='cpu')
     qnn.load_state_dict(ckpt, strict=False) ## no lora weight in ckpt
 
     for name, module in qnn.named_modules():
@@ -140,11 +139,11 @@ if __name__ == '__main__':
     
     avg_delta_list = []
     from transformers import get_linear_schedule_with_warmup
-    NUM_EPOCHS = 160
+    NUM_EPOCHS = 197
     firstone = True
     for name, module in model.named_modules():
         if isinstance(module, QuantModule_intnlora):
-            if len(module.act_quantizer.delta_list) != ddim_steps:
+            if len(module.act_quantizer.delta_list) != sample_steps:
                 raise ValueError('Wrong act_quantizer.delta_list length')
             avg_delta = torch.sum(module.weight_quantizer.delta) / torch.numel(module.weight_quantizer.delta)
 
@@ -172,15 +171,27 @@ if __name__ == '__main__':
     lr_scheduler = get_linear_schedule_with_warmup(
         optimizer=optimizer,
         num_warmup_steps=0,
-        num_training_steps=(NUM_EPOCHS * ddim_steps),
+        num_training_steps=(NUM_EPOCHS * sample_steps),
     )
 
     # Saving optimizer state for each step, which has little effect on performance. Uncomment line 368-370 & 405 in ddim.py if use it.
     # globalvar.init_state_list(ddim_steps) 
 
     model.eval()
-    sampler = DDIMSampler_trainer(fp_model, quant_model=model, lr_scheduler=lr_scheduler, optimizer=optimizer)
-    eval_sampler = DDIMSampler(model)
+
+    fp_order = 1
+    quant_order = 1
+    # fp_steps = 10
+    # quant_steps = 5
+    fp_steps = 100
+    quant_steps = 100
+
+    from ldm.models.diffusion.dpm_solver_pytorch import DpmSolverSampler, DpmSolverSampler_trainer
+
+    train_sampler = DpmSolverSampler_trainer(fp_model=fp_model, quant_model=model, fp_order=fp_order, 
+                                quant_order=quant_order, lr_scheduler=lr_scheduler, optimizer=optimizer,
+                                algorithm_type="dpmsolver", model_type="noise")
+    eval_sampler = DpmSolverSampler(model)
     eval_out_dir = os.path.join('experiments_log', str(datetime.datetime.now()))
     os.makedirs(eval_out_dir)
     all_samples = list()
@@ -202,14 +213,21 @@ if __name__ == '__main__':
                                         device=device)
             xc = torch.tensor(class_labels).to(model.device)
             c = model.get_learned_conditioning({model.cond_stage_key: xc.to(model.device)})
-            samples_ddim, _ = sampler.sample(S=ddim_steps,
-                                            conditioning=c,
-                                            batch_size=n_samples_per_class,
-                                            shape=[3, 64, 64],
-                                            verbose=False,
-                                            unconditional_guidance_scale=scale,
-                                            unconditional_conditioning=uc, 
-                                            eta=ddim_eta)
+
+            samples_ddim, _ = train_sampler.sample(
+                                batch_size=n_samples_per_class, 
+                                fp_steps=fp_steps, 
+                                quant_steps=quant_steps, 
+                                shape=[3, 64, 64], 
+                                skip_type='quad', 
+                                conditioning=c, 
+                                method="singlestep",
+                                verbose=False, 
+                                x_T=None, 
+                                log_every_t=100, 
+                                unconditional_guidance_scale=scale, 
+                                unconditional_conditioning=uc
+                              )
 
             
             # generate samples for visual evaluation
@@ -224,18 +242,25 @@ if __name__ == '__main__':
                 
                 for class_label in eval_classes:
                     t0 = time.time()
-                    print(f"rendering {n_samples_per_class} examples of class '{class_label}' in {ddim_steps} steps and using s={scale:.2f}.")
+                    print(f"rendering {n_samples_per_class} examples of class '{class_label}' in {sample_steps} steps and using s={scale:.2f}.")
                     xc = torch.tensor(n_samples_per_class*[class_label])
                     c = model.get_learned_conditioning({model.cond_stage_key: xc.to(model.device)})
                     
-                    samples_ddim, _ = eval_sampler.sample(S=ddim_steps,
-                                                    conditioning=c,
-                                                    batch_size=n_samples_per_class,
-                                                    shape=[3, 64, 64],
-                                                    verbose=False,
-                                                    unconditional_guidance_scale=scale,
-                                                    unconditional_conditioning=uc, 
-                                                    eta=ddim_eta)
+                    samples_ddim, _ = eval_sampler.sample(
+                                    S=sample_steps, # sample timestep
+                                    batch_size=n_samples_per_class,
+                                    shape=[3, 64, 64],
+                                    conditioning=c,
+                                    order=quant_order,
+                                    skip_type='quad',
+                                    method='singlestep',
+                                    verbose=False,
+                                    x_T=None,
+                                    log_every_t=100,
+                                    unconditional_guidance_scale=scale,
+                                    unconditional_conditioning=uc,
+                                    return_intermediate=True
+                    )
 
                     x_samples_ddim = model.decode_first_stage(samples_ddim)
                     x_samples_ddim = torch.clamp((x_samples_ddim+1.0)/2.0, 
@@ -255,7 +280,11 @@ if __name__ == '__main__':
                 image_to_save.save(os.path.join(eval_out_dir, "epoch{}.jpg".format(epoch)))
                 all_samples.clear()
 
-    torch.save(model.state_dict(), 'reproduce/ldm/weight/quantw{}a{}_{}steps_efficientdm.pth'.format(n_bits_w, n_bits_a, ddim_steps))
+    save_dir = "reproduce/ldmi/weight/saqlora"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    save_path = os.path.join(save_dir, 'quantw{}a{}_fporder{}_qorder{}_{}steps_saqlora_{}epochs.pth'.format(n_bits_w, n_bits_a, fp_order, quant_order, sample_steps, NUM_EPOCHS))
+    torch.save(model.state_dict(), save_path)
 
     ed_time = time.time()
     print(f'qlora took {ed_time - st_time:.5f} seconds')

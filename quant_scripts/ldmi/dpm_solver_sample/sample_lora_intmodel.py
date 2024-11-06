@@ -63,23 +63,22 @@ if __name__ == '__main__':
 
     classes = [387, 88, 979, 417]
     n_samples_per_class = 4
-    ddim_steps = 100
-    ddim_eta = 0.0
+    sample_steps = 20
     scale = 3.0  # for  guidance
 
-    # ddim_steps = 100
-    # ddim_eta = 1.0
-    # scale = 1.5  # for  guidance
+    # sample_steps = 100
+    # # ddim_eta = 1.0
+    # scale = 2.0  # for  guidance
 
     from quant_scripts.ldmi.quant_dataset import DiffusionInputDataset
     from torch.utils.data import DataLoader
 
-    dataset = DiffusionInputDataset('/home/zq/EfficientDM/reproduce/ldm/data/DiffusionInput_250steps.pth')
+    dataset = DiffusionInputDataset('/home/zq/EfficientDM/reproduce/ldmi/data/DiffusionSolverInput_250steps.pth')
     data_loader = DataLoader(dataset=dataset, batch_size=8, shuffle=True) ## each sample is (16,4,32,32)
     
     wq_params = {'n_bits': n_bits_w, 'channel_wise': True, 'scale_method': 'mse'}
     aq_params = {'n_bits': n_bits_a, 'channel_wise': False, 'scale_method': 'max', 'leaf_param': True}
-    qnn = QuantModel_intnlora(model=dmodel, weight_quant_params=wq_params, act_quant_params=aq_params, num_steps=ddim_steps)
+    qnn = QuantModel_intnlora(model=dmodel, weight_quant_params=wq_params, act_quant_params=aq_params, num_steps=sample_steps)
 
     print('Setting the first and the last layer to 8-bit')
     qnn.set_first_last_layer_to_8bit()
@@ -91,7 +90,7 @@ if __name__ == '__main__':
 
     for name, module in qnn.named_modules():
         if isinstance(module, QuantModule_intnlora) and module.ignore_reconstruction is False:
-            module.intn_dequantizer = SimpleDequantizer(uaq=module.weight_quantizer, weight=module.weight)
+            module.intn_dequantizer = SimpleDequantizer(uaq=module.weight_quantizer, weight=module.weight, device=device)
 
     # ckpt = torch.load('reproduce/ldm/weight/quantw4a4_naiveQ_intsaved.pth'.format(n_bits_w), map_location='cpu')
     # qnn.load_state_dict(ckpt, strict=False) ## no lora weight in ckpt
@@ -108,13 +107,14 @@ if __name__ == '__main__':
 
     setattr(model.model, 'diffusion_model', qnn)
     
-    ckpt = torch.load('reproduce/ldm/weight/quantw4a4_100steps_efficientdm.pth')
+    ckpt = torch.load('/home/zq/EfficientDM/reproduce/ldmi/weight/quantw4a4_100steps_saqlora_sample20.pth')
     model.load_state_dict(ckpt)
     
     model.cuda()
     model.eval()
 
-    sampler = DDIMSampler(model)
+    from ldm.models.diffusion.dpm_solver_pytorch import DpmSolverSampler
+    sampler = DpmSolverSampler(model)
 
     all_samples = list()
 
@@ -126,18 +126,25 @@ if __name__ == '__main__':
             
             for class_label in classes:
                 t0 = time.time()
-                print(f"rendering {n_samples_per_class} examples of class '{class_label}' in {ddim_steps} steps and using s={scale:.2f}.")
+                print(f"rendering {n_samples_per_class} examples of class '{class_label}' in {sampler} steps and using s={scale:.2f}.")
                 xc = torch.tensor(n_samples_per_class*[class_label])
                 c = model.get_learned_conditioning({model.cond_stage_key: xc.to(model.device)})
                 
-                samples_ddim, _ = sampler.sample(S=ddim_steps,
-                                                conditioning=c,
-                                                batch_size=n_samples_per_class,
-                                                shape=[3, 64, 64],
-                                                verbose=False,
-                                                unconditional_guidance_scale=scale,
-                                                unconditional_conditioning=uc, 
-                                                eta=ddim_eta)
+                samples_ddim, _ = sampler.sample(
+                                    S=sample_steps, # sample timestep
+                                    batch_size=n_samples_per_class,
+                                    shape=[3, 64, 64],
+                                    conditioning=c,
+                                    order=2,
+                                    skip_type='quad',
+                                    method='singlestep',
+                                    verbose=False,
+                                    x_T=None,
+                                    log_every_t=100,
+                                    unconditional_guidance_scale=scale,
+                                    unconditional_conditioning=uc,
+                                    return_intermediate=True
+                    )
 
                 x_samples_ddim = model.decode_first_stage(samples_ddim)
                 x_samples_ddim = torch.clamp((x_samples_ddim+1.0)/2.0, 
@@ -156,4 +163,4 @@ if __name__ == '__main__':
     # to image
     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
     image_to_save = Image.fromarray(grid.astype(np.uint8))
-    image_to_save.save('reproduce/ldm/sample/sample_100step_weight100_scale3_eta0.jpg')
+    image_to_save.save('reproduce/ldmi/sample/dpmsolver_train100_{}steps_scale{}.png'.format(sample_steps, scale))

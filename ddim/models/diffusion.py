@@ -483,116 +483,6 @@ class Diffusion(object):
         model.to(self.device)
         model.eval()
         assert(self.args.cond == False)
-        # if self.args.ptq:
-        #     if self.args.quant_mode == 'qdiff':
-        #         wq_params = {'n_bits': args.weight_bit, 'channel_wise': True, 'scale_method': 'max'}
-        #         aq_params = {'n_bits': args.act_bit, 'symmetric': args.a_sym, 'channel_wise': False, 'scale_method': 'max', 'leaf_param': args.quant_act}
-        #         if self.args.resume:
-        #             logger.info('Load with min-max quick initialization')
-        #             wq_params['scale_method'] = 'max'
-        #             aq_params['scale_method'] = 'max'
-        #         if self.args.resume_w:
-        #             wq_params['scale_method'] = 'max'
-        #         qnn = QuantModel(
-        #             model=model, weight_quant_params=wq_params, act_quant_params=aq_params, 
-        #             sm_abit=self.args.sm_abit)
-        #         qnn.to(self.device)
-        #         qnn.eval()
-
-                # if self.args.resume:
-                #     image_size = self.config.data.image_size
-                #     channels = self.config.data.channels
-                #     cali_data = (torch.randn(1, channels, image_size, image_size), torch.randint(0, 1000, (1,)))
-                #     resume_cali_model(qnn, args.cali_ckpt, cali_data, args.quant_act, "qdiff", cond=False)
-                # else:
-                #     logger.info(f"Sampling data from {self.args.cali_st} timesteps for calibration")
-                #     sample_data = torch.load(self.args.cali_data_path)
-                #     cali_data = get_train_samples(self.args, sample_data, custom_steps=0)
-                #     del(sample_data)
-                #     gc.collect()
-                #     logger.info(f"Calibration data shape: {cali_data[0].shape} {cali_data[1].shape}")
-
-                #     cali_xs, cali_ts = cali_data
-                #     if self.args.resume_w:
-                #         resume_cali_model(qnn, self.args.cali_ckpt, cali_data, False, cond=False)
-                #     else:
-                #         logger.info("Initializing weight quantization parameters")
-                #         qnn.set_quant_state(True, False) # enable weight quantization, disable act quantization
-                #         _ = qnn(cali_xs[:8].cuda(), cali_ts[:8].cuda())
-                #         logger.info("Initializing has done!")
-
-                #     # Kwargs for weight rounding calibration
-                #     kwargs = dict(cali_data=cali_data, batch_size=self.args.cali_batch_size, 
-                #                 iters=self.args.cali_iters, weight=0.01, asym=True, b_range=(20, 2),
-                #                 warmup=0.2, act_quant=False, opt_mode='mse')
-
-                #     def recon_model(model):
-                #         """
-                #         Block reconstruction. For the first and last layers, we can only apply layer reconstruction.
-                #         """
-                #         for name, module in model.named_children():
-                #             logger.info(f"{name} {isinstance(module, BaseQuantBlock)}")
-                #             if isinstance(module, QuantModule):
-                #                 if module.ignore_reconstruction is True:
-                #                     logger.info('Ignore reconstruction of layer {}'.format(name))
-                #                     continue
-                #                 else:
-                #                     logger.info('Reconstruction for layer {}'.format(name))
-                #                     layer_reconstruction(qnn, module, **kwargs)
-                #             elif isinstance(module, BaseQuantBlock):
-                #                 if module.ignore_reconstruction is True:
-                #                     logger.info('Ignore reconstruction of block {}'.format(name))
-                #                     continue
-                #                 else:
-                #                     logger.info('Reconstruction for block {}'.format(name))
-                #                     block_reconstruction(qnn, module, **kwargs)
-                #             else:
-                #                 recon_model(module)
-
-                #     if not self.args.resume_w:
-                #         logger.info("Doing weight calibration")
-                #         recon_model(qnn)
-                #         qnn.set_quant_state(weight_quant=True, act_quant=False)
-                #     if self.args.quant_act:
-                #         logger.info("UNet model")
-                #         logger.info(model)                    
-                #         logger.info("Doing activation calibration")   
-                #         # Initialize activation quantization parameters
-                #         qnn.set_quant_state(True, True)
-                #         with torch.no_grad():
-                #             inds = np.random.choice(cali_xs.shape[0], 64, replace=False)
-                #             # _ = qnn(cali_xs[:64].cuda(), cali_ts[:64].cuda())
-                #             _ = qnn(cali_xs[inds].cuda(), cali_ts[inds].cuda())
-                        
-                #             if self.args.running_stat:
-                #                 logger.info('Running stat for activation quantization')
-                #                 qnn.set_running_stat(True)
-                #                 for i in range(int(cali_xs.size(0) / 64)):
-                #                     _ = qnn(
-                #                         (cali_xs[i * 64:(i + 1) * 64].to(self.device), 
-                #                         cali_ts[i * 64:(i + 1) * 64].to(self.device)))
-                #                 qnn.set_running_stat(False)
-                        
-                #         kwargs = dict(
-                #             cali_data=cali_data, iters=self.args.cali_iters_a, act_quant=True, 
-                #             opt_mode='mse', lr=self.args.cali_lr, p=self.args.cali_p)   
-                #         recon_model(qnn)
-                #         qnn.set_quant_state(weight_quant=True, act_quant=True)   
-
-                #     logger.info("Saving calibrated quantized UNet model")
-                #     for m in qnn.model.modules():
-                #         if isinstance(m, AdaRoundQuantizer):
-                #             m.zero_point = nn.Parameter(m.zero_point)
-                #             m.delta = nn.Parameter(m.delta)
-                #         elif isinstance(m, UniformAffineQuantizer) and self.args.quant_act:
-                #             if m.zero_point is not None:
-                #                 if not torch.is_tensor(m.zero_point):
-                #                     m.zero_point = nn.Parameter(torch.tensor(float(m.zero_point)))
-                #                 else:
-                #                     m.zero_point = nn.Parameter(m.zero_point)
-                #     torch.save(qnn.state_dict(), os.path.join(self.args.logdir, "ckpt.pth"))
-
-                # model = qnn
 
         model.to(self.device)
         if self.args.verbose:
@@ -998,6 +888,8 @@ class DiffusionTrainer(object):
                 self.optimizer.step()
                 self.lr_scheduler.step()
 
+                print('loss: ', loss.item())
+
                 x0_t = (xt - et * (1 - at).sqrt()) / at.sqrt()
                 x0_preds.append(x0_t.to('cpu'))
                 c1 = (
@@ -1146,10 +1038,11 @@ class DiffusionTrainer(object):
 
             with amp.autocast(enabled=False):
                 if self.args.sample_type == 'generalized':
+                    print('train ', self.args.skip_type)
                     xs, x0_preds, ts = self.sample_image(x, train_mode)
                     x = xs[-1]
                 elif self.args.sample_type == 'dpm_solver':
-                    x, intermediates, x_interms, t_interms = self.sample_image(x, last=False, )
+                    x, intermediates, x_interms, t_interms = self.sample_image(x)
             # x = inverse_data_transform(config, x)
         else:
             with torch.no_grad():
@@ -1166,8 +1059,8 @@ class DiffusionTrainer(object):
                         xs, x0_preds, ts = self.sample_image(x, train_mode)
                         x = xs[-1]
                     elif self.args.sample_type == 'dpm_solver':
-                        x, intermediates, x_interms, t_interms = self.sample_image(x, last=False, )
-                # x = inverse_data_transform(config, x)
+                        x, intermediates, x_interms, t_interms = self.sample_image(x)
+                x = inverse_data_transform(config, x)
         return x
     
     

@@ -1,0 +1,3 @@
+11/02/2024 20:01:51 - INFO - __main__ -   Loading checkpoint /home/zq/.cache/diffusion_models_converted/ema_diffusion_cifar10_model/model-790000.ckpt
+11/02/2024 20:01:52 - INFO - __main__ -   Loading checkpoint /home/zq/.cache/diffusion_models_converted/ema_diffusion_cifar10_model/model-790000.ckpt
+11/02/2024 20:02:10 - INFO - ddim.models.diffusion -   use dpm-solver with 100 steps

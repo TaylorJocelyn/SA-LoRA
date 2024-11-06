@@ -40,6 +40,29 @@ class lsunInputDataset(Dataset):
     def __getitem__(self, idx):
         return self.xt_list[idx], self.t_list[idx]
 
+class IntermediateInputDataset(Dataset):
+    def __init__(self, data_path):
+        data_list = torch.load(data_path, map_location='cpu') ## its a list of tuples of tensors
+        # print(data_list.keys())
+        # print(data_list)
+        xs = data_list['x']
+        ts = data_list['t']
+        
+        self.xt_list = []
+        self.t_list = []
+        ## datalist[i][0].shape (B,4,32,32), flat B dimension
+        for i in range(len(xs)):
+            ct = ts[i]
+            for b in range(xs[i].shape[0]):
+                self.xt_list.append(xs[i][b])
+                self.t_list.append(ct)
+
+    def __len__(self):
+        return len(self.xt_list)
+    
+    def __getitem__(self, idx):
+        return self.xt_list[idx], self.t_list[idx]
+
 def get_train_samples(train_loader, num_samples, dataset_type='imagenet'):
     image_data, t_data, y_data = [], [], []
     if dataset_type == 'imagenet':

@@ -5,7 +5,9 @@ reproduce/ddim/weight/*
 reproduce/ddim/data/*
 reproduce/ldmi/weight/*
 reproduce/ldmi/data/*
+reproduce/ldmi/sample/*
 experiments_log/*
 evaluate_data/*
 clip/*
 taming-transformers/*
+experiments_log/*

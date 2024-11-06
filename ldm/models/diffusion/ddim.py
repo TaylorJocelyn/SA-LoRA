@@ -402,6 +402,7 @@ class DDIMSampler_trainer(object):
         self.optimizer.step()
         self.lr_scheduler.step()
 
+        print('loss: ', loss.item())
         # globalvar.saveStep(index, self.optimizer.state_dict())
 
         if score_corrector is not None: ## do not run
