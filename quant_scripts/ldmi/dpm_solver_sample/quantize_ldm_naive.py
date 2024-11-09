@@ -80,7 +80,7 @@ if __name__ == '__main__':
     start = time.time()
     print('First run to init model...')
     with torch.no_grad():
-        _ = qnn(cali_images[:32].to(device),cali_t[:32].to(device),cali_y[:32].to(device))
+        _ = qnn(cali_images[:512].to(device),cali_t[:512].to(device),cali_y[:512].to(device))
 
-    torch.save(qnn.state_dict(), 'reproduce/ldmi/weight/saqlora/quantw{}a{}_naiveQ.pth'.format(n_bits_w, n_bits_a))
+    torch.save(qnn.state_dict(), 'reproduce/ldmi/weight/saqlora/quantw{}a{}_dpmsolver_naiveQ.pth'.format(n_bits_w, n_bits_a))
     pass

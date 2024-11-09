@@ -74,7 +74,7 @@ def get_train_samples(train_loader, num_samples):
 
 if __name__ == '__main__':
     device = torch.device('cuda:0')
-    n_samples_per_class = 2
+    n_samples_per_class = 4
     ## Quality, sampling speed and diversity are best controlled via the `scale`, `ddim_steps` and `ddim_eta` variables
     sample_steps = 100
     scale = 1.5   # for  guidance
@@ -122,9 +122,12 @@ if __name__ == '__main__':
     
     print('First run to init model...') ## need run to init temporal act quantizer
     with torch.no_grad():
-        _ = qnn(cali_images[:512].to(device), cali_t[:512].to(device), cali_y[:512].to(device))
+        _ = qnn(cali_images[:4].to(device), cali_t[:4].to(device), cali_y[:4].to(device))
 
     setattr(model.model, 'diffusion_model', qnn)
+
+    ckpt = torch.load('/home/zq/EfficientDM/reproduce/ldmi/weight/saqlora/quantw4a4_fporder1_qorder1_100steps_saqlora_197epochs_dpmsolver.pth')
+    model.load_state_dict(ckpt)
 
     for name, param in model.named_parameters():
         if 'lora' in name or 'delta' in name or 'zp_list' in name:
@@ -139,7 +142,7 @@ if __name__ == '__main__':
     
     avg_delta_list = []
     from transformers import get_linear_schedule_with_warmup
-    NUM_EPOCHS = 177
+    NUM_EPOCHS = 197
     firstone = True
     for name, module in model.named_modules():
         if isinstance(module, QuantModule_intnlora):
@@ -179,11 +182,11 @@ if __name__ == '__main__':
 
     model.eval()
 
-    fp_order = 1
+    fp_order = 2
     quant_order = 1
     # fp_steps = 10
     # quant_steps = 5
-    fp_steps = 100
+    fp_steps = 200
     quant_steps = 100
 
     from ldm.models.diffusion.dpm_solver_pytorch import DpmSolverSampler, DpmSolverSampler_trainer
@@ -283,7 +286,7 @@ if __name__ == '__main__':
     save_dir = "reproduce/ldmi/weight/saqlora"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    save_path = os.path.join(save_dir, 'quantw{}a{}_fporder{}_qorder{}_{}steps_saqlora_{}epochs_bs{}_dpmsolver.pth'.format(n_bits_w, n_bits_a, fp_order, quant_order, sample_steps, NUM_EPOCHS, n_samples_per_class))
+    save_path = os.path.join(save_dir, 'quantw{}a{}_fporder{}_qorder{}_{}steps_saqlora_{}epochs_dpmsolver_retrain.pth'.format(n_bits_w, n_bits_a, fp_order, quant_order, sample_steps, NUM_EPOCHS))
     torch.save(model.state_dict(), save_path)
 
     ed_time = time.time()

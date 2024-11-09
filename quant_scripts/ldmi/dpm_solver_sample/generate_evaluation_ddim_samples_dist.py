@@ -30,8 +30,8 @@ from torch.utils.data import DataLoader
 from quant_scripts.ldmi.quant_model import QuantModel_intnlora
 from quant_scripts.ldmi.quant_layer import QuantModule_intnlora, SimpleDequantizer
 
-n_bits_w = 4
-n_bits_a = 4
+n_bits_w = 8
+n_bits_a = 8
 
 def load_model_from_config(config, ckpt):
     print(f"Loading model from {ckpt}")

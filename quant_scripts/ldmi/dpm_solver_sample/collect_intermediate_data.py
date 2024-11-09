@@ -41,8 +41,7 @@ if __name__ == '__main__':
 
     batch_size = 8
 
-    ddim_steps = 250
-    ddim_eta = 1.0
+    sample_steps = 250
     scale = 1.5
 
     all_samples = list()
@@ -55,14 +54,13 @@ if __name__ == '__main__':
             xc = torch.randint(0,1000,(batch_size,)).to(model.device)
             c = model.get_learned_conditioning({model.cond_stage_key: xc.to(model.device)})
             
-            x_interms, t_interms = sampler.collect_intermediate_data(S=ddim_steps,
+            x_interms, t_interms = sampler.collect_intermediate_data(S=sample_steps,
                                             conditioning=c,
                                             batch_size=batch_size,
                                             shape=[3, 64, 64],
                                             verbose=False,
                                             unconditional_guidance_scale=scale,
-                                            unconditional_conditioning=uc, 
-                                            eta=ddim_eta)
+                                            unconditional_conditioning=uc)
 
             # x_samples_ddim = model.decode_first_stage(samples_ddim)
             # x_samples_ddim = torch.clamp((x_samples_ddim+1.0)/2.0, 
@@ -75,6 +73,6 @@ if __name__ == '__main__':
     save_dir = "reproduce/ldmi/data"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    save_path = os.path.join(save_dir, 'DiffusionSolverInput_{}steps.pth'.format(ddim_steps))
+    save_path = os.path.join(save_dir, 'DiffusionSolverPlusInput_{}steps.pth'.format(sample_steps))
     torch.save(input_list, save_path)
     sys.exit(0)

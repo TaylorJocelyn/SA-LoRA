@@ -64,7 +64,7 @@ if __name__ == '__main__':
     classes = [387, 88, 979, 417]
     n_samples_per_class = 4
     sample_steps = 20
-    scale = 3.0  # for  guidance
+    scale = 1.75  # for  guidance
 
     # sample_steps = 100
     # # ddim_eta = 1.0
@@ -103,11 +103,11 @@ if __name__ == '__main__':
 
     print('First run to init model...') ## need run to init act quantizer (delta_list)
     with torch.no_grad():
-        _ = qnn(cali_images[:4].to(device),cali_t[:4].to(device),cali_y[:4].to(device))
+        _ = qnn(cali_images[:512].to(device),cali_t[:512].to(device),cali_y[:512].to(device))
 
     setattr(model.model, 'diffusion_model', qnn)
     
-    ckpt = torch.load('/home/zq/EfficientDM/reproduce/ldmi/weight/quantw4a4_100steps_saqlora_sample20.pth')
+    ckpt = torch.load('reproduce/ldmi/weight/saqlora/quantw4a4_fporder1_qorder1_100steps_saqlora_177epochs_dpmsolver_sample20.pth')
     model.load_state_dict(ckpt)
     
     model.cuda()
@@ -163,4 +163,4 @@ if __name__ == '__main__':
     # to image
     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
     image_to_save = Image.fromarray(grid.astype(np.uint8))
-    image_to_save.save('reproduce/ldmi/sample/dpmsolver_train100_{}steps_scale{}.png'.format(sample_steps, scale))
+    image_to_save.save('reproduce/ldmi/sample/dpmsolver_{}steps_scale{}_fp1_q1.png'.format(sample_steps, scale))

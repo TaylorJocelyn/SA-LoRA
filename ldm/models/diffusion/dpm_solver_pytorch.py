@@ -3169,6 +3169,12 @@ class DpmSolverSampler_trainer(object):
                                                                     unconditional_conditioning=unconditional_conditioning)
 
                 loss = F.mse_loss(model_s_quant, model_s_fp, size_average=False)
+                # model_s_quant_flat = model_s_quant.view(model_s_quant.size(0), -1)  # Shape: [batch_size, 3*64*64]
+                # model_s_fp_flat = model_s_fp.view(model_s_fp.size(0), -1)  # Shape: [batch_size, 3*64*64]
+                # cosine_similarity = F.cosine_similarity(model_s_quant_flat, model_s_fp_flat)
+                # cos_loss = torch.sum(1 - cosine_similarity)
+                # print('mse loss: ', mse_loss.item(), " cos loss: ", cos_loss)
+                # loss = mse_loss + 100. * cos_loss
                 loss.backward()
                 self.optimizer.step()
                 self.lr_scheduler.step()

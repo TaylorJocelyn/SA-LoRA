@@ -57,9 +57,9 @@ if __name__ == '__main__':
     # scale = 3.0
     # torch.manual_seed(3343)
 
-    sample_steps = 200
+    sample_steps = 100
     # ddim_eta = 0.0
-    scale = 2.0
+    scale = 1.5
     solver_order = 1
 
     from ldm.models.diffusion.dpm_solver_pytorch import DpmSolverSampler

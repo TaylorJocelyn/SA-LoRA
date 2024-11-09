@@ -67,7 +67,7 @@ if __name__ == '__main__':
     # Initialize weight quantization parameters
     qnn.set_quant_state(True, True)
 
-    ckpt = torch.load('reproduce/ldmi/weight/saqlora/quantw4a4_naiveQ.pth'.format(n_bits_w), map_location='cpu')
+    ckpt = torch.load('/home/zq/EfficientDM/reproduce/ldmi/weight/saqlora/quantw4a4_dpmsolver_naiveQ.pth'.format(n_bits_w), map_location='cpu')
     qnn.load_state_dict(ckpt)
     qnn.cuda()
     qnn.eval()
@@ -105,5 +105,5 @@ if __name__ == '__main__':
             module.weight.data = qweight
     
     qnn_sd = qnn.state_dict()
-    torch.save(qnn_sd, 'reproduce/ldmi/weight/saqlora/quantw{}a{}_naiveQ_intsaved.pth'.format(n_bits_w, n_bits_a))
+    torch.save(qnn_sd, 'reproduce/ldmi/weight/saqlora/quantw{}a{}_dpmsolver_naiveQ_intsaved.pth'.format(n_bits_w, n_bits_a))
     
